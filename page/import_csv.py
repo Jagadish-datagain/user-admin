@@ -193,6 +193,51 @@ def insert_data_in_batches(connection, df, table_name, batch_size=2000):
             connection.commit()
 
 def insert_unique_data(connection, df, table_name):
+    df.columns = clean_column_names(df.columns)
+
+    # Define primary key based on table
+    if table_name == TABLE_MANAGED:
+        primary_key_col = "Unique ID"
+
+    elif table_name == TABLE_PAYEE_SUPPORT:
+        primary_key_col = "Unique_ID"  # Always compare using "Unique_id"
+    
+    elif table_name == TABLE_IMPLEMENTATION:
+        with connection.cursor() as cursor:
+            cursor.execute(f"DELETE FROM `{table_name}`")
+            connection.commit()
+        insert_data_in_batches(connection, df, table_name)
+        st.success(f"Existing records deleted, and new records inserted into {table_name}.")
+        return
+
+    else:
+        st.error(f"Unique insertion is not supported for table: {table_name}")
+        return
+
+    # Validate primary key column exists
+    if primary_key_col not in df.columns:
+        st.error(f"Missing primary key column: {primary_key_col}")
+        return
+
+    # Clean up dataframe
+    df.dropna(subset=[primary_key_col], inplace=True)
+    df.drop_duplicates(subset=[primary_key_col], inplace=True)
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT `{primary_key_col}` FROM `{table_name}`")
+        existing_ids = {row[0] for row in cursor.fetchall()}
+
+    # Filter new records based on existing ones
+    new_records = df[~df[primary_key_col].isin(existing_ids)]
+
+    if new_records.empty:
+        st.warning(f"No new unique records found for {table_name}.")
+        return
+
+    insert_data_in_batches(connection, new_records, table_name)
+    st.success(f"{len(new_records)} unique records uploaded successfully to {table_name}.")
+
+def quality_unique_data(connection, df, table_name):
     cursor = connection.cursor()
 
     # Clean the Unique_ID column in the dataframe
@@ -254,8 +299,10 @@ def import_csv_process(table_name, required_columns, truncate=False):
                 connection = get_connection()
                 if connection:
                     if table_exists(connection, table_name):
-                        if table_name in [TABLE_MANAGED, TABLE_PAYEE_SUPPORT, TABLE_IMPLEMENTATION, "payee_support_quality"]:
+                        if table_name in [TABLE_MANAGED, TABLE_PAYEE_SUPPORT, TABLE_IMPLEMENTATION]:
                             insert_unique_data(connection, df, table_name)
+                        elif table_name in [TABLE_PAYEE_SUPPORT_quality]:
+                            quality_unique_data(connection, df, table_name)
                         else:
                             insert_data_in_batches(connection, df, table_name)
                             st.success(f"Data uploaded successfully to {table_name}")
