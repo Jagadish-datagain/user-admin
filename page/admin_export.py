@@ -323,14 +323,14 @@ def admin_export_page():
     # Tab 1: Managed Services
     with tab1:
         st.header("Managed Services Export")
+        start_date = st.date_input("Start Date", key="ms_start")
+        end_date = st.date_input("End Date", key="ms_end")
         email_address = st.selectbox("Email Address", options=[""] + fetch_unique_values("Email Address", "managed_services"))
         OCRs = st.multiselect("OCR", options=fetch_unique_values("OCR", "managed_services"))
         payers = st.multiselect("Payers", options=fetch_unique_values("payer", "managed_services"))
         bill_ref_code = st.text_input("Bill Reference Code")
         track_id = st.text_input("Track ID")
         annotation_id = st.text_input("Annotation ID")
-        start_date = st.date_input("Start Date", key="ms_start")
-        end_date = st.date_input("End Date", key="ms_end")
 
         if st.button("Export Data", key="export_managed_services"):
             if not (email_address or OCRs or payers or start_date or end_date or bill_ref_code or track_id or annotation_id):
